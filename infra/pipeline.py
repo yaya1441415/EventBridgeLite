@@ -5,6 +5,7 @@ from aws_cdk import (
     aws_sns as sns,
     aws_sns_subscriptions as subs,
     aws_sqs as sqs,
+    aws_dynamodb as ddb,
 )
 from constructs import Construct
 
@@ -19,6 +20,7 @@ class ConsumerPipeline(Construct):
         topic: sns.Topic,
         source: str,
         event_types: list[str] | None = None,
+        table:ddb.Table
     ) -> None:
         super().__init__(scope, construct_id)
         self.dlq = sqs.Queue(self, "Dlq")
@@ -48,6 +50,10 @@ class ConsumerPipeline(Construct):
             code=lambda_.Code.from_asset(source),
             timeout=Duration.seconds(10),
         )
+
+        self.function.add_environment("DEDUPE_TABLE", table.table_name)
+        self.function.add_environment("CONSUMER_NAME", construct_id)
+        table.grant_read_write_data(self.function)
 
         self.function.add_event_source(
             sources.SqsEventSource(self.queue, batch_size=5)
